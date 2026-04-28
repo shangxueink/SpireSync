@@ -85,26 +85,16 @@ def fetch_remote_config() -> dict | None:
 
 
 def load_config() -> dict:
-    """加载配置，优先使用云端配置"""
-    default = {
-        "download_url": ""
-    }
-    
-    # 尝试获取云端配置
+    """从云端加载配置"""
+    # 获取云端配置
     remote_config = fetch_remote_config()
-    if remote_config:
-        remote_config.setdefault("download_url", "")
+    if remote_config and remote_config.get("download_url"):
         return remote_config
     
-    # 云端获取失败，使用本地配置
-    print("[本地] 使用本地配置文件")
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-            cfg.setdefault("download_url", "")
-            return cfg
-    
-    return default
+    # 云端获取失败
+    print("[错误] 无法获取云端配置")
+    print("       请检查网络连接")
+    return None
 
 
 def apply_mirror_to_url(url: str) -> str:
@@ -248,7 +238,7 @@ def main():
 
     try:
         # 检查游戏 EXE 是否在同目录
-        print("[检查] 正在检查游戏 EXE...")
+        print("[检查] 正在检查��戏 EXE...")
         game_path = check_game_exe_in_current_dir()
 
         if game_path is None:
@@ -273,8 +263,12 @@ def main():
         print(f"[找到] 游戏路径: {game_dir}")
         print()
 
-        # 加载配置（优先云端）
+        # 加载云端配置
         config = load_config()
+        if config is None:
+            print()
+            input("按任意键退出...")
+            sys.exit(1)
         print()
 
         # 备份现有mods
