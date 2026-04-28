@@ -120,18 +120,16 @@ def backup_mods(game_dir: Path) -> Path | None:
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_name = f"mods_backup_{timestamp}"
-    backup_dir = game_dir / backup_name
-    mods_dir.rename(backup_dir)
-
     zip_path = game_dir / f"{backup_name}.zip"
+    
+    # 直接打包，不移动文件夹
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root, _, files in os.walk(backup_dir):
+        for root, _, files in os.walk(mods_dir):
             for file in files:
                 file_path = Path(root) / file
-                arcname = file_path.relative_to(backup_dir)
+                arcname = file_path.relative_to(mods_dir)
                 zf.write(file_path, arcname)
 
-    shutil.rmtree(backup_dir)
     return zip_path
 
 
@@ -284,7 +282,10 @@ def main():
             print("  4. 将 SpireSync.exe 复制到该目录")
             print("  5. 确保 SpireSync.exe 和 SlayTheSpire2.exe 在同一文件夹")
             print()
-            input("按任意键退出...")
+            try:
+                input("按任意键退出...")
+            except KeyboardInterrupt:
+                pass
             sys.exit(1)
 
         game_dir = game_path.parent
@@ -295,7 +296,10 @@ def main():
         config = load_config()
         if config is None:
             print()
-            input("按任意键退出...")
+            try:
+                input("按任意键退出...")
+            except KeyboardInterrupt:
+                pass
             sys.exit(1)
         print()
 
@@ -327,7 +331,10 @@ def main():
             print("  3. 检查云端配置是否正确")
             if backup_path:
                 print(f"  4. 手动恢复备份: {backup_path}")
-            input("\n按回车键退出...")
+            try:
+                input("\n按回车键退出...")
+            except KeyboardInterrupt:
+                pass
             sys.exit(1)
 
         print()
@@ -336,17 +343,26 @@ def main():
         print("=" * 60)
         print()
         print("[提示] 请前往 Steam 启动游戏")
-        input("\n按任意键退出...")
+        try:
+            input("\n按任意键退出...")
+        except KeyboardInterrupt:
+            pass
 
     except KeyboardInterrupt:
         print("\n\n[中断] 用户取消操作")
-        input("\n按任意键退出...")
+        try:
+            input("\n按任意键退出...")
+        except KeyboardInterrupt:
+            pass
         sys.exit(0)
     except Exception as e:
         print(f"\n[错误] 发生未预期的错误: {e}")
         import traceback
         traceback.print_exc()
-        input("\n按任意键退出...")
+        try:
+            input("\n按任意键退出...")
+        except KeyboardInterrupt:
+            pass
         sys.exit(1)
 
 
