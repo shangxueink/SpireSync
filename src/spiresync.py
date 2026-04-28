@@ -51,11 +51,12 @@ def fetch_remote_config() -> dict | None:
     
     # 转换为 raw URL
     raw_url = REMOTE_CONFIG_URL.replace("/blob/", "/raw/")
+    print(f"[地址] {raw_url}")
     
     # 只使用镜像源，不直连
-    for mirror in MIRROR_SOURCES:
+    for idx, mirror in enumerate(MIRROR_SOURCES, 1):
         mirror_url = f"{mirror}/{raw_url}"
-        print(f"[尝试] {mirror}")
+        print(f"[尝试] 使用镜像源 {idx}/{len(MIRROR_SOURCES)}")
         
         success, content = try_fetch_url(mirror_url, timeout=10)
         if success:
@@ -135,9 +136,13 @@ def backup_mods(game_dir: Path) -> Path | None:
 
 
 def clean_mods(game_dir: Path):
+    """清理mods文件夹"""
     mods_dir = game_dir / MODS_FOLDER
     if mods_dir.exists():
         shutil.rmtree(mods_dir)
+        print("[清理] 正在清空 mods 文件夹...")
+    else:
+        print("[清理] mods 文件夹不存在，无需清理")
     mods_dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -152,13 +157,14 @@ def download_mods(game_dir: Path, download_url: str):
     # 获取所有镜像源URL
     mirror_urls = apply_mirror_to_url(download_url)
     print(f"[下载] 正在下载 mod 包...")
+    print(f"[地址] {download_url}")
     
     tmp_file = tempfile.mktemp(suffix=".zip")
     
     # 尝试每个镜像源
     for idx, url in enumerate(mirror_urls, 1):
         try:
-            print(f"[尝试] 镜像源 {idx}/{len(mirror_urls)}")
+            print(f"[尝试] 使用镜像源 {idx}/{len(mirror_urls)}")
             
             req = Request(url, headers={"User-Agent": "SpireSync/1.0"})
             with urlopen(req, timeout=180) as resp:
@@ -177,7 +183,10 @@ def download_mods(game_dir: Path, download_url: str):
                         downloaded += len(chunk)
                         if total_size:
                             progress = (downloaded / total_size) * 100
-                            print(f"\r[进度] {progress:.1f}% ({downloaded / 1024 / 1024:.2f} MB)", end="")
+                            bar_length = 40
+                            filled = int(bar_length * downloaded / total_size)
+                            bar = '█' * filled + '░' * (bar_length - filled)
+                            print(f"\r[进度] {bar} {progress:.1f}% ({downloaded / 1024 / 1024:.2f} MB)", end="")
                 
                 if total_size:
                     print()  # 换行
@@ -300,9 +309,7 @@ def main():
         print()
 
         # 清理mods文件夹
-        print("[清理] 正在清空 mods 文件夹...")
         clean_mods(game_dir)
-        print("[清理] 完成")
         print()
 
         # 下载最新mod包
@@ -328,7 +335,7 @@ def main():
         print("[成功] Mod 同步完成!")
         print("=" * 60)
         print()
-        print("[提示] 请手动启动游戏")
+        print("[提示] 请前往 Steam 启动游戏")
         input("\n按任意键退出...")
 
     except KeyboardInterrupt:
