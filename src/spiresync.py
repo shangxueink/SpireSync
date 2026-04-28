@@ -127,48 +127,19 @@ def apply_mirror_to_url(url: str) -> str:
     return url
 
 
-def get_available_drives():
-    drives = []
-    for letter in range(65, 91):
-        drive = f"{chr(letter)}:\\"
-        if os.path.exists(drive):
-            drives.append(drive)
-    return drives
-
-
-def find_game_path() -> Path | None:
-    drives = get_available_drives()
-    candidate_paths = []
-
-    for drive in drives:
-        steam_lib = Path(drive) / "SteamLibrary" / "steamapps" / "common" / GAME_FOLDER_NAME / GAME_EXE
-        if steam_lib.exists():
-            candidate_paths.append(steam_lib)
-
-    if not candidate_paths:
-        steam_path = Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")) / "Steam"
-        vdf_path = steam_path / "steamapps" / "libraryfolders.vdf"
-        if vdf_path.exists():
-            lib_paths = _parse_libraryfolders_vdf(vdf_path)
-            for lib_path in lib_paths:
-                full = Path(lib_path) / "steamapps" / "common" / GAME_FOLDER_NAME / GAME_EXE
-                if full.exists():
-                    candidate_paths.append(full)
-
-    return candidate_paths[0] if candidate_paths else None
-
-
-def _parse_libraryfolders_vdf(vdf_path: str) -> list:
-    paths = []
-    with open(vdf_path, "r", encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-            if stripped.startswith('"path"'):
-                parts = stripped.split('"')
-                if len(parts) >= 4:
-                    p = parts[3].replace("\\\\", "\\")
-                    paths.append(p)
-    return paths
+def check_game_exe_in_current_dir() -> Path | None:
+    """检查当前目录是否存在游戏 EXE"""
+    if getattr(sys, "frozen", False):
+        # 打包后的 EXE，检查同目录
+        current_dir = Path(os.path.dirname(sys.executable))
+    else:
+        # 开发环境，检查项目根目录（仅用于测试）
+        current_dir = Path(__file__).parent.parent
+    
+    game_exe = current_dir / GAME_EXE
+    if game_exe.exists():
+        return game_exe
+    return None
 
 
 def backup_mods(game_dir: Path) -> Path | None:
@@ -276,23 +247,34 @@ def main():
     print()
 
     try:
-        # 加载配置（优先云端）
-        config = load_config()
-        print()
-
-        # 搜索游戏路径
-        print("[扫描] 正在搜索 Steam 游戏目录...")
-        game_path = find_game_path()
+        # 检查游戏 EXE 是否在同目录
+        print("[检查] 正在检查游戏 EXE...")
+        game_path = check_game_exe_in_current_dir()
 
         if game_path is None:
-            print("[错误] 未找到杀戮尖塔2的安装路径!")
-            print("       请确保游戏已通过 Steam 安装。")
-            print("       预期路径: X:\\SteamLibrary\\steamapps\\common\\Slay the Spire 2")
-            input("\n按回车键退出...")
+            print()
+            print("=" * 60)
+            print("[错误] 未找到 SlayTheSpire2.exe")
+            print("=" * 60)
+            print()
+            print("请将 SpireSync.exe 放到杀戮尖塔2游戏目录下")
+            print()
+            print("如何找到游戏目录：")
+            print("  1. 打开 Steam")
+            print("  2. 右键点击【杀戮尖塔2】")
+            print("  3. 选择【管理】->【浏览本地文件】")
+            print("  4. 将 SpireSync.exe 复制到该目录")
+            print("  5. 确保 SpireSync.exe 和 SlayTheSpire2.exe 在同一文件夹")
+            print()
+            input("按任意键退出...")
             sys.exit(1)
 
         game_dir = game_path.parent
         print(f"[找到] 游戏路径: {game_dir}")
+        print()
+
+        # 加载配置（优先云端）
+        config = load_config()
         print()
 
         # 备份现有mods
