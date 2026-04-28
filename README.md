@@ -52,4 +52,10 @@ build.bat
 
 ## 许可证
 
-MIT License - 详见 [LICENSE](LICENSE)
+本项目（SpireSync 同步工具）采用 MIT License - 详见 [LICENSE](LICENSE)
+
+## 重要说明
+
+本工具仅提供 Mod 同步功能，所分发的 Mod 内容版权归各 Mod 原作者所有。
+
+使用本工具下载和使用的 Mod 需遵循各 Mod 原作者的许可协议。
