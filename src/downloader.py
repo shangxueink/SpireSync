@@ -111,12 +111,17 @@ def download_mods(game_dir: Path, download_url: str) -> bool:
 
     mods_dir = game_dir / "mods"
     
+    # 在游戏目录创建 temp/remote-zip 工作目录
+    temp_dir = game_dir / "temp" / "remote-zip"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    
     # 获取所有镜像源URL
     mirror_urls = apply_mirror_to_url(download_url)
     print(f"[下载] 正在下载 mod 包...")
     print(f"[地址] {download_url}")
     
-    tmp_file = tempfile.mktemp(suffix=".zip")
+    # 下载到 temp/remote-zip 目录
+    tmp_file = temp_dir / "mods.zip"
     
     # 尝试每个镜像源
     for idx, mirror_url in enumerate(mirror_urls, 1):

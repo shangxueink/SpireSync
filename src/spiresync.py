@@ -42,16 +42,18 @@ def get_exe_dir() -> Path:
 
 
 def backup_mods(game_dir: Path) -> Path | None:
-    """备份现有 mods 文件夹到 EXE 所在目录"""
+    """备份现有 mods 文件夹到游戏目录的 temp 文件夹"""
     mods_dir = game_dir / MODS_FOLDER
     if not mods_dir.exists() or not any(mods_dir.iterdir()):
         return None
 
-    # 备份到 EXE 所在目录
-    exe_dir = get_exe_dir()
+    # 备份到游戏目录的 temp 文件夹
+    temp_dir = game_dir / "temp"
+    temp_dir.mkdir(exist_ok=True)
+    
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_name = f"mods_backup_{timestamp}"
-    zip_path = exe_dir / f"{backup_name}.zip"
+    zip_path = temp_dir / f"{backup_name}.zip"
     
     # 直接打包，不移动文件夹
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -126,7 +128,6 @@ def main():
         backup_path = backup_mods(game_dir)
         if backup_path:
             print(f"[备份] 原有 mods 已备份至: {backup_path}")
-            print(f"[位置] 备份文件保存在 EXE 同目录")
         else:
             print("[备份] 无需备份（mods 文件夹为空或不存在）")
         print()
