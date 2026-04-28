@@ -46,35 +46,22 @@ def try_fetch_url(url: str, timeout: int = 10) -> tuple[bool, str]:
 
 
 def fetch_remote_config() -> dict | None:
-    """从云端获取配置，尝试所有镜像源"""
+    """从云端获取配置，使用镜像源"""
     print("[云端] 正在获取最新配置...")
     
-    # 先尝试直接访问
-    print(f"[尝试] 直连: {REMOTE_CONFIG_URL}")
-    success, content = try_fetch_url(REMOTE_CONFIG_URL, timeout=5)
-    if success:
-        try:
-            # GitHub blob页面返回的是HTML，需要获取raw内容
-            raw_url = REMOTE_CONFIG_URL.replace("/blob/", "/raw/")
-            success, content = try_fetch_url(raw_url, timeout=5)
-            if success:
-                config = json.loads(content)
-                print("[成功] 直连获取配置成功")
-                return config
-        except json.JSONDecodeError:
-            pass
+    # 转换为 raw URL
+    raw_url = REMOTE_CONFIG_URL.replace("/blob/", "/raw/")
     
-    # 尝试镜像源
+    # 只使用镜像源，不直连
     for mirror in MIRROR_SOURCES:
-        raw_url = REMOTE_CONFIG_URL.replace("/blob/", "/raw/")
         mirror_url = f"{mirror}/{raw_url}"
-        print(f"[尝试] 镜像源: {mirror}")
+        print(f"[尝试] {mirror}")
         
         success, content = try_fetch_url(mirror_url, timeout=10)
         if success:
             try:
                 config = json.loads(content)
-                print(f"[成功] 通过镜像源 {mirror} 获取配置成功")
+                print(f"[成功] 获取配置成功")
                 return config
             except json.JSONDecodeError as e:
                 print(f"[警告] 配置解析失败: {e}")
@@ -97,24 +84,17 @@ def load_config() -> dict:
     return None
 
 
-def apply_mirror_to_url(url: str) -> str:
-    """为GitHub URL应用镜像源"""
+def apply_mirror_to_url(url: str) -> list:
+    """为GitHub URL生成所有镜像源URL列表"""
     if not url or not url.startswith("https://github.com"):
-        return url
+        return [url]
     
-    # 尝试每个镜像源
+    # 返回所有镜像源URL
+    mirror_urls = []
     for mirror in MIRROR_SOURCES:
-        mirror_url = f"{mirror}/{url}"
-        print(f"[测试] 镜像源: {mirror}")
-        
-        # 快速测试连通性
-        success, _ = try_fetch_url(mirror_url, timeout=5)
-        if success:
-            print(f"[选择] 使用镜像源: {mirror}")
-            return mirror_url
+        mirror_urls.append(f"{mirror}/{url}")
     
-    print("[警告] 所有镜像源均不可用，使用原始URL")
-    return url
+    return mirror_urls
 
 
 def check_game_exe_in_current_dir() -> Path | None:
@@ -162,60 +142,84 @@ def clean_mods(game_dir: Path):
 
 
 def download_mods(game_dir: Path, download_url: str):
-    """下载并解压mod包，自动应用镜像源"""
+    """下载并解压mod包，尝试所有镜像源"""
     if not download_url:
         print("[错误] 未配置下载地址")
         return False
 
     mods_dir = game_dir / MODS_FOLDER
     
-    # 应用镜像源
-    final_url = apply_mirror_to_url(download_url)
+    # 获取所有镜像源URL
+    mirror_urls = apply_mirror_to_url(download_url)
     print(f"[下载] 正在下载 mod 包...")
-    print(f"[地址] {final_url}")
-
+    
     tmp_file = tempfile.mktemp(suffix=".zip")
-    try:
-        req = Request(final_url, headers={"User-Agent": "SpireSync/1.0"})
-        with urlopen(req, timeout=180) as resp:
-            total_size = resp.headers.get("Content-Length")
-            if total_size:
-                total_size = int(total_size)
-                print(f"[大小] {total_size / 1024 / 1024:.2f} MB")
+    
+    # 尝试每个镜像源
+    for idx, url in enumerate(mirror_urls, 1):
+        try:
+            print(f"[尝试] 镜像源 {idx}/{len(mirror_urls)}")
             
-            downloaded = 0
-            with open(tmp_file, "wb") as f:
-                while True:
-                    chunk = resp.read(8192)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if total_size:
-                        progress = (downloaded / total_size) * 100
-                        print(f"\r[进度] {progress:.1f}% ({downloaded / 1024 / 1024:.2f} MB)", end="")
+            req = Request(url, headers={"User-Agent": "SpireSync/1.0"})
+            with urlopen(req, timeout=180) as resp:
+                total_size = resp.headers.get("Content-Length")
+                if total_size:
+                    total_size = int(total_size)
+                    print(f"[大小] {total_size / 1024 / 1024:.2f} MB")
+                
+                downloaded = 0
+                with open(tmp_file, "wb") as f:
+                    while True:
+                        chunk = resp.read(8192)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size:
+                            progress = (downloaded / total_size) * 100
+                            print(f"\r[进度] {progress:.1f}% ({downloaded / 1024 / 1024:.2f} MB)", end="")
+                
+                if total_size:
+                    print()  # 换行
+
+            print(f"[解压] 正在解压到 {mods_dir} ...")
+            with zipfile.ZipFile(tmp_file, "r") as zf:
+                zf.extractall(mods_dir)
+
+            print(f"[完成] mod 文件已放置到 {mods_dir}")
+            if os.path.exists(tmp_file):
+                os.remove(tmp_file)
+            return True
             
-            if total_size:
-                print()  # 换行
-
-        print(f"[解压] 正在解压到 {mods_dir} ...")
-        with zipfile.ZipFile(tmp_file, "r") as zf:
-            zf.extractall(mods_dir)
-
-        print(f"[完成] mod 文件已放置到 {mods_dir}")
-        return True
-    except (URLError, HTTPError) as e:
-        print(f"\n[错误] 下载失败: {e}")
-        return False
-    except zipfile.BadZipFile:
-        print("\n[错误] 下载的文件不是有效的 zip 包")
-        return False
-    except Exception as e:
-        print(f"\n[错误] 未知错误: {e}")
-        return False
-    finally:
-        if os.path.exists(tmp_file):
-            os.remove(tmp_file)
+        except (URLError, HTTPError) as e:
+            print(f"\n[失败] 此镜像源不可用: {e}")
+            if idx < len(mirror_urls):
+                print("[继续] 尝试下一个镜像源...")
+                if os.path.exists(tmp_file):
+                    try:
+                        os.remove(tmp_file)
+                    except:
+                        pass
+                continue
+        except zipfile.BadZipFile:
+            print("\n[错误] 下载的文件不是有效的 zip 包")
+            if os.path.exists(tmp_file):
+                os.remove(tmp_file)
+            return False
+        except Exception as e:
+            print(f"\n[错误] 未知错误: {e}")
+            if idx < len(mirror_urls):
+                if os.path.exists(tmp_file):
+                    try:
+                        os.remove(tmp_file)
+                    except:
+                        pass
+                continue
+    
+    if os.path.exists(tmp_file):
+        os.remove(tmp_file)
+    print("\n[错误] 所有镜像源均下载失败")
+    return False
 
 
 def launch_game(game_dir: Path):
@@ -309,11 +313,7 @@ def main():
         print("[成功] Mod 同步完成!")
         print("=" * 60)
         print()
-
-        # 启动游戏
-        launch_game(game_dir)
-        print()
-        print("[提示] 游戏已启动")
+        print("[提示] 请手动启动游戏")
         input("\n按任意键退出...")
 
     except KeyboardInterrupt:
