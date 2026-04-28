@@ -1,1 +1,5 @@
+# SpireSync 依赖包
+# 使用 uv 管理: pip install uv && uv pip install -r requirements.txt
+
+# 打包工具
 pyinstaller>=6.0.0
