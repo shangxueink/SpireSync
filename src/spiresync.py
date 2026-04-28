@@ -238,7 +238,7 @@ def main():
 
     try:
         # 检查游戏 EXE 是否在同目录
-        print("[检查] 正在检查��戏 EXE...")
+        print("[检查] 正在检查游戏 EXE...")
         game_path = check_game_exe_in_current_dir()
 
         if game_path is None:
