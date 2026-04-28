@@ -182,9 +182,24 @@ def download_mods(game_dir: Path, download_url: str):
                 if total_size:
                     print()  # 换行
 
-            print(f"[解压] 正在解压到 {mods_dir} ...")
+            print(f"[解压] 正在解压...")
             with zipfile.ZipFile(tmp_file, "r") as zf:
-                zf.extractall(mods_dir)
+                # 检查 ZIP 内容结构
+                file_list = zf.namelist()
+                
+                # 检查是否所有文件都在 mods/ 目录下
+                if file_list and all(f.startswith('mods/') for f in file_list):
+                    # ZIP 内有 mods 文件夹，需要去掉这一层
+                    print(f"[检测] ZIP 包含 mods 文件夹，自动处理...")
+                    for file_info in zf.infolist():
+                        if file_info.filename.startswith('mods/'):
+                            # 去掉 mods/ 前缀
+                            file_info.filename = file_info.filename[5:]  # 移除 "mods/"
+                            if file_info.filename:  # 跳过空文件名（即 mods/ 目录本身）
+                                zf.extract(file_info, mods_dir)
+                else:
+                    # ZIP 内直接是 mod 文件，正常解压
+                    zf.extractall(mods_dir)
 
             print(f"[完成] mod 文件已放置到 {mods_dir}")
             if os.path.exists(tmp_file):
