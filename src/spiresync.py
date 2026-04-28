@@ -1,119 +1,38 @@
+"""
+SpireSync - 杀戮尖塔2 Mod 同步工具
+核心逻辑模块
+"""
 import os
 import sys
-import json
 import shutil
 import zipfile
-import tempfile
-import subprocess
-from datetime import datetime
 from pathlib import Path
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
+from datetime import datetime
+
+# 导入自定义模块
+from steam_finder import find_game_install
+from downloader import fetch_remote_config, download_mods
 
 
-def _get_config_path():
-    if getattr(sys, "frozen", False):
-        return Path(os.path.dirname(sys.executable)) / "config.json"
-    return Path(__file__).parent.parent / "config.json"
-
-CONFIG_PATH = _get_config_path()
-
-GAME_EXE = "SlayTheSpire2.exe"
-GAME_FOLDER_NAME = "Slay the Spire 2"
+# 常量定义
 MODS_FOLDER = "mods"
-
-# 云端配置地址
-REMOTE_CONFIG_URL = "https://github.com/shangxueink/SpireSync/blob/main/config.json"
-
-# 镜像源列表（按优先级排序）
-MIRROR_SOURCES = [
-    "https://edgeone.gh-proxy.com",
-    "https://hk.gh-proxy.com",
-    "https://gh-proxy.com",
-    "https://gh.llkk.cc",
-]
-
-
-def try_fetch_url(url: str, timeout: int = 10) -> tuple[bool, str]:
-    """尝试访问URL并返回内容"""
-    try:
-        req = Request(url, headers={"User-Agent": "SpireSync/1.0"})
-        with urlopen(req, timeout=timeout) as resp:
-            content = resp.read().decode("utf-8")
-            return True, content
-    except (URLError, HTTPError, Exception) as e:
-        return False, str(e)
-
-
-def fetch_remote_config() -> dict | None:
-    """从云端获取配置，使用镜像源"""
-    print("[云端] 正在获取最新配置...")
-    
-    # 转换为 raw URL
-    raw_url = REMOTE_CONFIG_URL.replace("/blob/", "/raw/")
-    print(f"[地址] {raw_url}")
-    
-    # 只使用镜像源，不直连
-    for idx, mirror in enumerate(MIRROR_SOURCES, 1):
-        mirror_url = f"{mirror}/{raw_url}"
-        print(f"[尝试] 使用镜像源 {idx}/{len(MIRROR_SOURCES)}")
-        
-        success, content = try_fetch_url(mirror_url, timeout=10)
-        if success:
-            try:
-                config = json.loads(content)
-                print(f"[成功] 获取配置成功")
-                return config
-            except json.JSONDecodeError as e:
-                print(f"[警告] 配置解析失败: {e}")
-                continue
-    
-    print("[失败] 所有镜像源均无法访问")
-    return None
 
 
 def load_config() -> dict:
-    """从云端加载配置"""
-    # 获取云端配置
-    remote_config = fetch_remote_config()
-    if remote_config and remote_config.get("download_url"):
-        return remote_config
+    """加载配置（从云端获取）"""
+    print("[云端] 正在获取最新配置...")
+    config = fetch_remote_config()
     
-    # 云端获取失败
-    print("[错误] 无法获取云端配置")
-    print("       请检查网络连接")
-    return None
-
-
-def apply_mirror_to_url(url: str) -> list:
-    """为GitHub URL生成所有镜像源URL列表"""
-    if not url or not url.startswith("https://github.com"):
-        return [url]
+    if config is None:
+        print("[错误] 无法获取云端配置")
+        return None
     
-    # 返回所有镜像源URL
-    mirror_urls = []
-    for mirror in MIRROR_SOURCES:
-        mirror_urls.append(f"{mirror}/{url}")
-    
-    return mirror_urls
-
-
-def check_game_exe_in_current_dir() -> Path | None:
-    """检查当前目录是否存在游戏 EXE"""
-    if getattr(sys, "frozen", False):
-        # 打包后的 EXE，检查同目录
-        current_dir = Path(os.path.dirname(sys.executable))
-    else:
-        # 开发环境，检查项目根目录（仅用于测试）
-        current_dir = Path(__file__).parent.parent
-    
-    game_exe = current_dir / GAME_EXE
-    if game_exe.exists():
-        return game_exe
-    return None
+    print("[成功] 获取配置成功")
+    return config
 
 
 def backup_mods(game_dir: Path) -> Path | None:
+    """备份现有 mods 文件夹"""
     mods_dir = game_dir / MODS_FOLDER
     if not mods_dir.exists() or not any(mods_dir.iterdir()):
         return None
@@ -144,116 +63,6 @@ def clean_mods(game_dir: Path):
     mods_dir.mkdir(parents=True, exist_ok=True)
 
 
-def download_mods(game_dir: Path, download_url: str):
-    """下载并解压mod包，尝试所有镜像源"""
-    if not download_url:
-        print("[错误] 未配置下载地址")
-        return False
-
-    mods_dir = game_dir / MODS_FOLDER
-    
-    # 获取所有镜像源URL
-    mirror_urls = apply_mirror_to_url(download_url)
-    print(f"[下载] 正在下载 mod 包...")
-    print(f"[地址] {download_url}")
-    
-    tmp_file = tempfile.mktemp(suffix=".zip")
-    
-    # 尝试每个镜像源
-    for idx, url in enumerate(mirror_urls, 1):
-        try:
-            print(f"[尝试] 使用镜像源 {idx}/{len(mirror_urls)}")
-            
-            req = Request(url, headers={"User-Agent": "SpireSync/1.0"})
-            with urlopen(req, timeout=180) as resp:
-                total_size = resp.headers.get("Content-Length")
-                if total_size:
-                    total_size = int(total_size)
-                    print(f"[大小] {total_size / 1024 / 1024:.2f} MB")
-                
-                downloaded = 0
-                with open(tmp_file, "wb") as f:
-                    while True:
-                        chunk = resp.read(8192)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total_size:
-                            progress = (downloaded / total_size) * 100
-                            bar_length = 40
-                            filled = int(bar_length * downloaded / total_size)
-                            bar = '█' * filled + '░' * (bar_length - filled)
-                            print(f"\r[进度] {bar} {progress:.1f}% ({downloaded / 1024 / 1024:.2f} MB)", end="")
-                
-                if total_size:
-                    print()  # 换行
-
-            print(f"[解压] 正在解压...")
-            with zipfile.ZipFile(tmp_file, "r") as zf:
-                # 检查 ZIP 内容结构
-                file_list = zf.namelist()
-                
-                # 检查是否所有文件都在 mods/ 目录下
-                if file_list and all(f.startswith('mods/') for f in file_list):
-                    # ZIP 内有 mods 文件夹，需要去掉这一层
-                    print(f"[检测] ZIP 包含 mods 文件夹，自动处理...")
-                    for file_info in zf.infolist():
-                        if file_info.filename.startswith('mods/'):
-                            # 去掉 mods/ 前缀
-                            file_info.filename = file_info.filename[5:]  # 移除 "mods/"
-                            if file_info.filename:  # 跳过空文件名（即 mods/ 目录本身）
-                                zf.extract(file_info, mods_dir)
-                else:
-                    # ZIP 内直接是 mod 文件，正常解压
-                    zf.extractall(mods_dir)
-
-            print(f"[完成] mod 文件已放置到 {mods_dir}")
-            if os.path.exists(tmp_file):
-                os.remove(tmp_file)
-            return True
-            
-        except (URLError, HTTPError) as e:
-            print(f"\n[失败] 此镜像源不可用: {e}")
-            if idx < len(mirror_urls):
-                print("[继续] 尝试下一个镜像源...")
-                if os.path.exists(tmp_file):
-                    try:
-                        os.remove(tmp_file)
-                    except:
-                        pass
-                continue
-        except zipfile.BadZipFile:
-            print("\n[错误] 下载的文件不是有效的 zip 包")
-            if os.path.exists(tmp_file):
-                os.remove(tmp_file)
-            return False
-        except Exception as e:
-            print(f"\n[错误] 未知错误: {e}")
-            if idx < len(mirror_urls):
-                if os.path.exists(tmp_file):
-                    try:
-                        os.remove(tmp_file)
-                    except:
-                        pass
-                continue
-    
-    if os.path.exists(tmp_file):
-        os.remove(tmp_file)
-    print("\n[错误] 所有镜像源均下载失败")
-    return False
-
-
-def launch_game(game_dir: Path):
-    exe_path = game_dir / GAME_EXE
-    if not exe_path.exists():
-        print(f"[错误] 找不到游戏可执行文件: {exe_path}")
-        return False
-    print(f"[启动] 正在启动 {exe_path} ...")
-    subprocess.Popen(str(exe_path), cwd=str(game_dir))
-    return True
-
-
 def main():
     """主函数"""
     print("=" * 60)
@@ -263,24 +72,21 @@ def main():
     print()
 
     try:
-        # 检查游戏 EXE 是否在同目录
-        print("[检查] 正在检查游戏 EXE...")
-        game_path = check_game_exe_in_current_dir()
+        # 自动查找游戏安装路径
+        print("[检查] 正在查找游戏安装路径...")
+        print()
+        game_path = find_game_install()
 
         if game_path is None:
             print()
             print("=" * 60)
-            print("[错误] 未找到 SlayTheSpire2.exe")
+            print("[错误] 未找到杀戮尖塔2游戏")
             print("=" * 60)
             print()
-            print("请将 SlayTheSpire2_Sync_MOD.exe 放到杀戮尖塔2游戏目录下")
-            print()
-            print("如何找到游戏目录：")
-            print("  1. 打开 Steam")
-            print("  2. 右键点击【杀戮尖塔2】")
-            print("  3. 选择【管理】->【浏览本地文件】")
-            print("  4. 将 SlayTheSpire2_Sync_MOD.exe 复制到该目录")
-            print("  5. 确保 SlayTheSpire2_Sync_MOD.exe 和 SlayTheSpire2.exe 在同一文件夹")
+            print("请尝试：")
+            print("  1. 将 SlayTheSpire2_Sync_MOD.exe 放到游戏目录")
+            print("  2. 打开 Steam → 右键【杀戮尖塔2】→【管理】→【浏览本地文件】")
+            print("  3. 将 SlayTheSpire2_Sync_MOD.exe 复制到该目录后重新运行")
             print()
             try:
                 input("按任意键退出...")
