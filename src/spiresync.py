@@ -85,6 +85,46 @@ def main():
     print("  GitHub: https://github.com/shangxueink/SpireSync")
     print("=" * 60)
     print()
+    
+    # 显示警告和确认提示（在最开始）
+    print("=" * 60)
+    print("  重要提示")
+    print("=" * 60)
+    print()
+    print("此操作将：")
+    print("  • 替换你当前所有的 Mod")
+    print("  • 使用远程 Mod 以确保多人联机统一")
+    print("  • 你的 Mod 会被备份到 ZIP 压缩包")
+    print()
+    print("=" * 60)
+    print()
+    print("按 Enter 或 Y 键继续，按 Esc 或 N 键取消...")
+    
+    # 监听单个按键
+    try:
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                # Enter (13), Y/y (89/121)
+                if key in (b'\r', b'Y', b'y'):
+                    print("\n[确认] 开始同步...")
+                    print()
+                    break
+                # Esc (27), N/n (78/110)
+                elif key in (b'\x1b', b'N', b'n'):
+                    print("\n[取消] 用户取消操作")
+                    try:
+                        input("\n按任意键退出...")
+                    except KeyboardInterrupt:
+                        pass
+                    sys.exit(0)
+    except KeyboardInterrupt:
+        print("\n\n[取消] 用户取消操作")
+        try:
+            input("\n按任意键退出...")
+        except KeyboardInterrupt:
+            pass
+        sys.exit(0)
 
     try:
         # 自动查找游戏安装路径
@@ -123,46 +163,6 @@ def main():
                 pass
             sys.exit(1)
         print()
-
-        # 显示警告和确认提示
-        print("=" * 60)
-        print("⚠️  重要提示")
-        print("=" * 60)
-        print()
-        print("此操作将：")
-        print("  • 替换你当前所有的 Mod")
-        print("  • 使用远程 Mod 以确保多人联机统一")
-        print("  • 你的 Mod 会被备份到 ZIP 压缩包")
-        print()
-        print("=" * 60)
-        print()
-        print("按 Enter 或 Y 键继续，按 Esc 或 N 键取消...")
-        
-        # 监听单个按键
-        try:
-            while True:
-                if msvcrt.kbhit():
-                    key = msvcrt.getch()
-                    # Enter (13), Y/y (89/121)
-                    if key in (b'\r', b'Y', b'y'):
-                        print("\n[确认] 开始同步...")
-                        print()
-                        break
-                    # Esc (27), N/n (78/110)
-                    elif key in (b'\x1b', b'N', b'n'):
-                        print("\n[取消] 用户取消操作")
-                        try:
-                            input("\n按任意键退出...")
-                        except KeyboardInterrupt:
-                            pass
-                        sys.exit(0)
-        except KeyboardInterrupt:
-            print("\n\n[取消] 用户取消操作")
-            try:
-                input("\n按任意键退出...")
-            except KeyboardInterrupt:
-                pass
-            sys.exit(0)
 
         # 备份现有mods
         print("[备份] 正在检查现有 mods 文件夹...")
