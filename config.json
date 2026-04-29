@@ -1,3 +1,8 @@
 {
-    "download_url": "https://github.com/shangxueink/SpireSync/releases/download/2026-4-28/mods.zip"
+  "shangxueink": [
+    "https://github.com/shangxueink/SpireSync/releases/download/2026-4-28/mods.zip"
+  ],
+  "lumia1998": [
+    "https://github.com/lumia1998/mods/releases/download/auto-25031071893-28d8121678fd7dd7f960b128941756e53bd33525/mods.zip"
+  ]
 }
