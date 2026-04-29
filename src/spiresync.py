@@ -208,32 +208,39 @@ def main():
             sys.exit(1)
         print()
         
-        # 如果有多个 mod 源，显示选择菜单
-        if len(config) > 1:
-            result = show_mod_source_menu(config)
-            if result is None:
+        # 兼容旧格式配置（download_url 键）
+        if "download_url" in config:
+            # 旧格式：{"download_url": "https://..."}
+            download_url = config["download_url"]
+            print(f"[配置] 使用旧格式配置")
+            print()
+        else:
+            # 新格式：{"source_name": ["url1", "url2"]}
+            # 如果有多个 mod 源，显示选择菜单
+            if len(config) > 1:
+                result = show_mod_source_menu(config)
+                if result is None:
+                    try:
+                        input("\n按任意键退出...")
+                    except KeyboardInterrupt:
+                        pass
+                    sys.exit(0)
+                
+                selected_name, selected_urls = result
+                download_url = selected_urls[0]  # 使用第一个 URL
+            elif len(config) == 1:
+                selected_name = list(config.keys())[0]
+                selected_urls = list(config.values())[0]
+                download_url = selected_urls[0]
+                print(f"[自动] 使用唯一 mod 源: {selected_name}")
+                print()
+            else:
+                print("[错误] 配置文件中没有可用的 mod 源")
                 try:
                     input("\n按任意键退出...")
                 except KeyboardInterrupt:
                     pass
-                sys.exit(0)
-            
-            selected_name, selected_urls = result
-            download_url = selected_urls[0]  # 使用第一个 URL
-        elif len(config) == 1:
-            # 只有一个源，直接使用
-            selected_name = list(config.keys())[0]
-            selected_urls = list(config.values())[0]
-            download_url = selected_urls[0]
-            print(f"[自动] 使用唯一 mod 源: {selected_name}")
-            print()
-        else:
-            print("[错误] 配置文件中没有可用的 mod 源")
-            try:
-                input("\n按任意键退出...")
-            except KeyboardInterrupt:
-                pass
-            sys.exit(1)
+                sys.exit(1)
         
         # 自动查找游戏安装路径
         print("[检查] 正在查找游戏安装路径...")
