@@ -78,6 +78,76 @@ def clean_mods(game_dir: Path):
     mods_dir.mkdir(parents=True, exist_ok=True)
 
 
+def show_mod_source_menu(sources: dict) -> tuple[str, list[str]] | None:
+    """
+    显示 mod 源选择菜单
+    返回: (选中的源名称, 该源的URL列表) 或 None（用户取消）
+    """
+    source_list = list(sources.items())
+    selected_index = 0
+    
+    def render_menu():
+        """渲染菜单"""
+        # 清屏（Windows）
+        os.system('cls' if os.name == 'nt' else 'clear')
+        
+        print("=" * 60)
+        print("  SpireSync - 杀戮尖塔2 Mod 同步启动器 v1.0")
+        print("  GitHub: https://github.com/shangxueink/SpireSync")
+        print("=" * 60)
+        print()
+        print("=" * 60)
+        print("  选择 Mod 源")
+        print("=" * 60)
+        print()
+        print("使用 ↑↓ 方向键选择，Enter 或 Y 确认，Esc 或 N 取消")
+        print()
+        
+        for i, (name, urls) in enumerate(source_list):
+            if i == selected_index:
+                print(f"  → {name}")
+            else:
+                print(f"    {name}")
+        
+        print()
+        print("=" * 60)
+    
+    # 初始渲染
+    render_menu()
+    
+    # 监听按键
+    try:
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                
+                # 方向键特殊处理（Windows 下方向键是两个字节）
+                if key == b'\xe0':  # 方向键前缀
+                    key = msvcrt.getch()
+                    if key == b'H':  # 上箭头
+                        selected_index = (selected_index - 1) % len(source_list)
+                        render_menu()
+                    elif key == b'P':  # 下箭头
+                        selected_index = (selected_index + 1) % len(source_list)
+                        render_menu()
+                
+                # Enter 或 Y 确认
+                elif key in (b'\r', b'Y', b'y'):
+                    selected_name, selected_urls = source_list[selected_index]
+                    print(f"\n[选择] 已选择: {selected_name}")
+                    print()
+                    return (selected_name, selected_urls)
+                
+                # Esc 或 N 取消
+                elif key in (b'\x1b', b'N', b'n'):
+                    print("\n[取消] 用户取消操作")
+                    return None
+                    
+    except KeyboardInterrupt:
+        print("\n\n[取消] 用户取消操作")
+        return None
+
+
 def main():
     """主函数"""
     print("=" * 60)
@@ -127,6 +197,44 @@ def main():
         sys.exit(0)
 
     try:
+        # 加载云端配置
+        config = load_config()
+        if config is None:
+            print()
+            try:
+                input("按任意键退出...")
+            except KeyboardInterrupt:
+                pass
+            sys.exit(1)
+        print()
+        
+        # 如果有多个 mod 源，显示选择菜单
+        if len(config) > 1:
+            result = show_mod_source_menu(config)
+            if result is None:
+                try:
+                    input("\n按任意键退出...")
+                except KeyboardInterrupt:
+                    pass
+                sys.exit(0)
+            
+            selected_name, selected_urls = result
+            download_url = selected_urls[0]  # 使用第一个 URL
+        elif len(config) == 1:
+            # 只有一个源，直接使用
+            selected_name = list(config.keys())[0]
+            selected_urls = list(config.values())[0]
+            download_url = selected_urls[0]
+            print(f"[自动] 使用唯一 mod 源: {selected_name}")
+            print()
+        else:
+            print("[错误] 配置文件中没有可用的 mod 源")
+            try:
+                input("\n按任意键退出...")
+            except KeyboardInterrupt:
+                pass
+            sys.exit(1)
+        
         # 自动查找游戏安装路径
         print("[检查] 正在查找游戏安装路径...")
         print()
@@ -153,57 +261,6 @@ def main():
         print(f"[找到] 游戏路径: {game_dir}")
         print()
 
-        # 加载云端配置
-        config = load_config()
-        if config is None:
-            print()
-            try:
-                input("按任意键退出...")
-            except KeyboardInterrupt:
-                pass
-            sys.exit(1)
-        print()
-
-        # 显示警告和确认提示
-        print("=" * 60)
-        print("⚠️  重要提示")
-        print("=" * 60)
-        print()
-        print("此操作将：")
-        print("  • 替换你当前所有的 Mod")
-        print("  • 使用远程 Mod 以确保多人联机统一")
-        print("  • 你的 Mod 会被备份到 ZIP 压缩包")
-        print()
-        print("=" * 60)
-        print()
-        print("按 Enter 或 Y 键继续，按 Esc 或 N 键取消...")
-        
-        # 监听单个按键
-        try:
-            while True:
-                if msvcrt.kbhit():
-                    key = msvcrt.getch()
-                    # Enter (13), Y/y (89/121)
-                    if key in (b'\r', b'Y', b'y'):
-                        print("\n[确认] 开始同步...")
-                        print()
-                        break
-                    # Esc (27), N/n (78/110)
-                    elif key in (b'\x1b', b'N', b'n'):
-                        print("\n[取消] 用户取消操作")
-                        try:
-                            input("\n按任意键退出...")
-                        except KeyboardInterrupt:
-                            pass
-                        sys.exit(0)
-        except KeyboardInterrupt:
-            print("\n\n[取消] 用户取消操作")
-            try:
-                input("\n按任意键退出...")
-            except KeyboardInterrupt:
-                pass
-            sys.exit(0)
-
         # 备份现有mods
         print("[备份] 正在检查现有 mods 文件夹...")
         backup_path = backup_mods(game_dir)
@@ -219,7 +276,7 @@ def main():
 
         # 下载最新mod包
         print("[同步] 正在下载最新 mod 包...")
-        success = download_mods(game_dir, config["download_url"])
+        success = download_mods(game_dir, download_url)
         
         if not success:
             print()
